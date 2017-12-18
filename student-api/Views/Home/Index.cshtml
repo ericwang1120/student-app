@@ -1,0 +1,124 @@
+
+<div id="grid"></div>
+<script>
+    var hobbySelections = new kendo.data.DataSource({
+        transport: {
+            read: {
+                url: "/api/hobbies",
+                dataType: "json"
+            }
+        }
+    });
+
+    function hobbiesEditor(container, options) {
+        $("<select multiple='multiple' data-bind='value: Hobbies'/>")
+            .appendTo(container)
+            .kendoMultiSelect({
+                valuePrimitive: true,
+                dataSource: hobbySelections,
+                dataTextField: "Name",
+                dataValueField: "Id"
+            });
+    }
+
+    function displayOptionNames(selectedOptions) {
+        /** When firstly retrieving data, the api returns Hobby objects. Simply using obj.Name to map the object to name.
+        /   After using multi-select, the selectedOptions will be turned to int arrays like: [0,1]
+        /   Using findHobbyObjByHobbyId(obj).Name to map the id to Hobby objects, then map to Name of the hobby
+        **/
+        return selectedOptions.length > 0 ? selectedOptions
+            .map(obj => obj.Name ? obj.Name : findHobbyObjByHobbyId(obj).Name)
+            .join(', ') : '';
+    }
+
+    // Get Hobby Objects by Hobby Id
+    function findHobbyObjByHobbyId(id) {
+        var allHobbies = hobbySelections.data().toJSON();
+        return allHobbies.filter(obj => obj.Id === id)[0];
+    }
+
+    $("#grid").kendoGrid({
+        columns: [
+            { hidden: true, field: "Id" },
+            { field: "Name" },
+            {
+                field: "Gender",
+                values: [
+                    { text: "male", value: 0 },
+                    { text: "female", value: 1 },
+                    { text: "others", value: 2 },
+                ],
+            },
+            { field: "Address" },
+            {
+                field: "Hobbies",
+                template: "#= displayOptionNames(Hobbies) #",
+                editor: hobbiesEditor
+            },
+            { command: "destroy" }],
+        filterable: true,
+        dataSource: {
+            transport: {
+                read: {
+                    url: "/api/students",
+                    dataType: "json"
+                },
+                update: {
+                    url: function (item) { return `/api/students/${item.Id}` },
+                    dataType: "json",
+                    type: "put"
+                },
+                create: {
+                    url: function (item) { return `/api/students/${item.Id}` },
+                    dataType: "json",
+                    type: "post"
+                },
+                destroy: {
+                    url: function (item) { return `/api/students/${item.Id}` },
+                    dataType: "json",
+                    type: "delete"
+                },
+                parameterMap: function (data, type) {
+                    var hobbySelectionExisted = hobbySelections.data().toJSON().length > 0;
+
+                    switch (type) {
+                        case ('create'): {
+                            return {
+                                ...data,
+                                Id: 0,
+                                Hobbies: data.Hobbies ? data.Hobbies
+                                    .map(hobbyId => findHobbyObjByHobbyId(hobbyId)) : []
+                            }
+                        }
+                        case ('update'): {
+                            // data.Hobbies[0] && data.Hobbies[0].Id means the hobby field is changed
+                            return {
+                                ...data,
+                                Hobbies:
+                                data.Hobbies[0] && data.Hobbies[0].Id ? data.Hobbies: data.Hobbies
+                                    .map(hobbyId => findHobbyObjByHobbyId(hobbyId)) 
+                            }
+                        }
+                        default:
+                            return data;
+                    };
+                }
+            },
+            schema: {
+                model: {
+                    id: "Id",
+                    Gender: {
+                        defaultValue: 0
+                    },
+                    Hobbies: {
+                        defaultValue: []
+                    }
+                }
+            },
+            pageSize: 10
+        },
+        pageable: true,
+        toolbar: ["create", "save", "cancel"],
+        editable: true
+    });
+</script>
